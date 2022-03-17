@@ -1354,28 +1354,24 @@ else
 sysblock=\"\$(mount | grep \" /android \" | tail -1 | awk '{ print \$1 }')\"
 mkdir /system_root
 mount \$sysblock /system_root
-mountpoint -q /android/oem && mount --move /android/oem /system_root/oem
-mount -t tmpfs tmpfs /android/oem
-chmod 750 /android/oem
-mkdir -p /android/oem/.overlay/oem
-mount --bind /system_root/oem /android/oem/.overlay/oem
-rm -rf /oem
-ln -fs /android/oem /oem
-ln -s /oem/.overlay/oem/* /oem
-mkdir /android/oem/.overlay/upper
-mkdir /android/oem/.overlay/work
-mount -t overlay tmpfs -o lowerdir=/android/system/etc/init,upperdir=/android/oem/.overlay/upper,workdir=/android/oem/.overlay/work /android/system/etc/init
+# prepare for second stage
+inittmp=/android/dev
+mount -t tmpfs tmpfs \$inittmp
+chmod 750 \$inittmp
+mkdir \$inittmp/.overlay/upper
+mkdir \$inittmp/.overlay/work
+mount -t overlay tmpfs -o lowerdir=/android/system/etc/init,upperdir=\$inittmp/.overlay/upper,workdir=\$inittmp/.overlay/work /android/system/etc/init
 sed -i \"s|MAGISK_FILES_BASE|/system/etc/init/magisk|g\" /magisk/overlay.sh
 sed -i \"s|MAGISK_FILES_BASE|/system/etc/init/magisk|g\" /magisk/magisk.rc
-cp -a /magisk /android/oem/.overlay/upper
-cp /magisk/magisk.rc /android/oem/.overlay/upper/magisk.rc
+cp -a /magisk \$inittmp/.overlay/upper
+cp /magisk/magisk.rc \$inittmp/.overlay/upper/magisk.rc
 fi
 ln -sf ./magiskinit /magisk/magiskpolicy
 
 bind_policy(){
 policy=\"\$1\"
-/magisk/magiskpolicy --load \"\$policy\" --save /android/oem/.overlay/policy --magisk \"allow * magisk_file lnk_file *\"
-mount --bind /android/oem/.overlay/policy \"\$policy\"
+/magisk/magiskpolicy --load \"\$policy\" --save \$inittmp/.overlay/policy --magisk \"allow * magisk_file lnk_file *\"
+mount --bind \$inittmp/.overlay/policy \"\$policy\"
 }
 
 
@@ -1384,6 +1380,7 @@ if [ -f /android/system/vendor/etc/selinux/precompiled_sepolicy ]; then
 elif [ -f /android/sepolicy ]; then
   bind_policy /android/sepolicy
 fi
+umount -l \$inittmp
 " >"$TMPDIR/ramdisk/scripts/999_magisk"
 else
 abortc light_red "! Unknown ramdisk structure"
